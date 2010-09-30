@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="test" basedir=".">
+	<description>${project.description}</description>
+	<property name="src" location="src" />
+	<property name="test-src" location="test-src" />
+	<property name="lib" location="lib" />
+	<property name="build" location="build" />
+	<property name="dist" location="dist" />
+	<property file="build.properties" />
+
+	<target name="init">
+		<pathconvert property="libjars" pathsep=":">
+			<fileset dir="${lib}" includes="*.jar" erroronmissingdir="false" />
+		</pathconvert>
+		<pathconvert property="libjars.cobertura" pathsep=":">
+			<fileset dir="${lib}/cobertura" includes="*.jar" erroronmissingdir="false" />
+		</pathconvert>
+		<taskdef classpath="${libjars.cobertura}" resource="tasks.properties" />
+	</target>
+
+	<target name="compile" depends="init">
+		<mkdir dir="${build}/bin" />
+		<javac
+			srcdir="${src}"
+			destdir="${build}/bin"
+			classpath="${lib}:${libjars}"
+			debug="true"
+			includeantruntime="false">
+			<compilerarg line="-Xlint:all -Xlint:-path -Xlint:unchecked" />
+		</javac>
+	</target>
+
+	<target name="instrument" depends="init, compile">
+		<delete file="cobertura.ser" />
+		<delete dir="${build}/instrumented-bin" />
+		<mkdir dir="${build}/instrumented-bin" />
+		<cobertura-instrument todir="${build}/instrumented-bin">
+			<fileset dir="${build}/bin">
+				<include name="**/*.class" />
+				<exclude name="**/*Test.class" />
+				<exclude name="**/*Test$*.class" />
+			</fileset>
+		</cobertura-instrument>
+	</target>
+
+	<target name="compile-test" depends="init, compile">
+		<mkdir dir="${build}/bin" />
+		<javac
+			srcdir="${test-src}"
+			destdir="${build}/bin"
+			classpath="${lib}:${libjars}"
+			debug="true"
+			includeantruntime="false">
+			<compilerarg line="-Xlint:all -Xlint:-path -Xlint:unchecked" />
+		</javac>
+	</target>
+
+	<target name="test" depends="compile, instrument, compile-test">
+		<mkdir dir="${build}/report/test" />
+		<mkdir dir="${build}/report/test/xml" />
+		<junit printsummary="true" failureproperty="junit.failure" fork="true">
+			<classpath path="${build}/instrumented-bin:${build}/bin:${lib}:lib/cobertura/cobertura.jar:${libjars}" />
+			<batchtest todir="${build}/report/test/xml">
+				<fileset dir="test-src">
+					<include name="**/*.java" />
+				</fileset>
+				<formatter type="xml" />
+			</batchtest>
+		</junit>
+		<junitreport >
+			<fileset dir="${build}/report/test/xml" />
+			<report todir="${build}/report/test" />
+		</junitreport>
+		<fail if="junit.failure" message="Unit test(s) failed. See reports!" />
+		<!--
+		<jtiger haltOnFailure="false">
+			<fixtures>
+				<fileset dir="${test-src}">
+					<include name="**/**.java" />
+				</fileset>
+			</fixtures>
+			<result name="~html">
+				<param value="${build}/report/test" />
+			</result>
+			<java classpath="${build}/instrumented-bin:${build}/bin:${lib}:${libjars}" failonerror="true" />
+		</jtiger>
+		-->
+
+		<mkdir dir="${build}/report/coverage" />
+		<cobertura-report destdir="${build}/report/coverage">
+			<fileset dir="${src}">
+				<include name="**/*.java" />
+			</fileset>
+		</cobertura-report>
+		<delete file="cobertura.ser" />
+	</target>
+
+	<target name="setup" depends="compile">
+		<java
+			classpath="${build}/bin:${lib}:${libjars}"
+			classname="${project.setup.main}"
+			fork="true">
+			<arg line="${project.setup.args}" />
+		</java>
+	</target>
+
+	<target name="run" depends="compile">
+		<java
+			classpath="${build}/bin:${lib}:${libjars}"
+			classname="${project.run.main}"
+			fork="true">
+			<arg line="${project.run.args}" />
+		</java>
+	</target>
+
+	<target name="doc">
+		<mkdir dir="${build}/doc" />
+		<javadoc
+			sourcepath="${src}"
+			destdir="${build}/doc"
+			link="${project.doc.base}"
+			use="true" />
+	</target>
+
+	<target name="clean">
+		<delete quiet="true" dir="${build}" />
+		<delete file="cobertura.ser"/>
+	</target>
+
+</project>
